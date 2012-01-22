@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #-*- coding:utf-8 -*-
 
+import re
 import sys
 import struct
 import operator
@@ -161,7 +162,7 @@ class PayloadGenerator:
         while True:
             payload = ""
             addrs = ""
-            printed = start_len + padding
+            printed = start_len
             for addr, size, value in self.tuples:
                 print_len = value - printed
                 if print_len > 2:
@@ -177,7 +178,7 @@ class PayloadGenerator:
                 printed += print_len
                 index += 1
             
-            payload += "A" *  (-len(payload) % 4)  # align 4 bytes
+            payload += "A" *  ((padding-len(payload)) % 4)  # align 4 bytes
             
             if len(payload) == prev_len:
                 payload += addrs  # argnumbers are set right
@@ -189,8 +190,7 @@ class PayloadGenerator:
 
         if "\x00" in payload:
             warning("Payload contains NULL bytes.")
-        return (("W" * padding) + payload).ljust(self.buffer_size, "X")
-
+        return payload.ljust(self.buffer_size, "X")
 
 class Word:
     def __init__(self, value):
@@ -205,7 +205,6 @@ class Byte:
 
     def __int__(self):
         return self.value
-
 
 def warning(s):
         print >>sys.stderr, "WARNING:", s
@@ -231,4 +230,5 @@ def main():
 
 
 if __name__ == "__main__":
+    print "MAIN"
     main()
