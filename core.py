@@ -190,7 +190,7 @@ class PayloadGenerator:
 
         if "\x00" in payload:
             warning("Payload contains NULL bytes.")
-        return payload.ljust(self.buffer_size, "X")
+        return payload.ljust(self.buffer_size, "\x90")
 
 class Word:
     def __init__(self, value):
@@ -227,8 +227,3 @@ def main():
     # buf is 14th argument, 3 bytes padding
     pay = p.payload(14, 3)
     sys.stdout.write(pay)
-
-
-if __name__ == "__main__":
-    print "MAIN"
-    main()
