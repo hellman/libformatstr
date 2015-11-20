@@ -7,5 +7,9 @@ setup(name='libformatstr',
       description='Create payloads for format string exploits',
       author='hellman',
       url='https://github.com/hellman/libformatstr',
-      packages=['libformatstr']
+      packages=['libformatstr'],
+      license="MIT",
+      classifiers=[
+        "License :: OSI Approved :: MIT License"
+      ]
       )
