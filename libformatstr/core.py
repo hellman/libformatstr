@@ -193,7 +193,7 @@ class PayloadGenerator:
                 elif print_len >= 0:
                     payload += "A" * print_len
                 else:
-                    warning("Can't write a value %08x (too small) %08x." % (value, print_len))
+                    warning("Can't write a value %08x (too small)." % value)
                     continue
 
                 modi = {
