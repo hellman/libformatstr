@@ -1,12 +1,14 @@
 #!/usr/bin/env python
-#-*- coding:utf-8 -*-
+# -*- coding:utf-8 -*-
 
 import re
 import sys
 import struct
 import operator
+from collections import OrderedDict
 
-#TODO: group the same words? (need markers) (or they can be displaced without noticing it)
+
+# TODO: group the same words? (need markers) (or they can be displaced without noticing it)
 
 # INPUT for setitem:
 # Address:
@@ -19,9 +21,13 @@ import operator
 #   List of values above: [0xdeadbeef, "sc\x00\x00", "test", Word(0x1337)]
 
 class FormatStr:
-    def __init__(self, buffer_size=0):
-        self.mem = {}
+    def __init__(self, buffer_size=0, autosort=True):
+        if autosort:
+            self.mem = {}
+        else:
+            self.mem = OrderedDict()
         self.buffer_size = buffer_size
+        self.autosort = autosort
         self.parsers = {
             list: self._set_list,
             str: self._set_str,
@@ -56,7 +62,7 @@ class FormatStr:
         for i, value in enumerate(lst):
             addr = self.__setitem__(addr, value)
         return addr
-    
+
     def _set_str(self, addr, s):
         for i, c in enumerate(s):
             self._set_byte(addr + i, ord(c))
@@ -72,26 +78,35 @@ class FormatStr:
             self.mem[addr + i] = (int(value) >> (i * 8)) % (1 << 8)
         return addr + 2
 
+    def word(self, addr, value):
+        return self._set_word(addr, value)
+
     def _set_byte(self, addr, value):
         self.mem[addr] = int(value) % (1 << 8)
         return addr + 1
 
+    def byte(self, addr, value):
+        return self._set_byte(addr, value)
+
     def payload(self, *args, **kwargs):
-        gen = PayloadGenerator(self.mem, self.buffer_size)
+        gen = PayloadGenerator(self.mem, self.buffer_size, autosort=self.autosort)
         return gen.payload(*args, **kwargs)
 
 
 class PayloadGenerator:
-    def __init__(self, mem, buffer_size):
+    def __init__(self, mem=OrderedDict(), buffer_size=0, autosort=True):
         """
-        Make tuples like (address, word/dword, value), sorted by value.
+        Make tuples like (address, word/dword, value), sorted by value as default.
         Trying to avoid null byte by using preceding address in the case.
         """
         self.mem = mem
         self.buffer_size = buffer_size
-
         self.tuples = []
-        self.addrs = list(sorted(mem.keys()))  # addresses of each byte to set
+        self.autosort = autosort
+        if autosort:
+            self.addrs = list(mem.keys())  # addresses of each byte to set
+        else:
+            self.addrs = list(sorted(mem.keys()))
 
         addr_index = 0
         while addr_index < len(self.addrs):
@@ -106,7 +121,7 @@ class PayloadGenerator:
                 dword |= self.mem[addr + i] << (i * 8)
 
             if 0 <= dword < (1 << 16):
-                self.tuples.append( (addr, 4, dword) )
+                self.tuples.append((addr, 4, dword))
                 if self.addrs[addr_index + 2] == addr + 3:
                     addr_index += 3  # backstepped
                 elif self.addrs[addr_index + 3] == addr + 3:
@@ -114,7 +129,7 @@ class PayloadGenerator:
                 else:
                     raise ValueError("Unknown error. Missing bytes")
                 continue
-            
+
             word = 0
             for i in range(2):
                 if addr + i not in self.mem:
@@ -123,7 +138,7 @@ class PayloadGenerator:
                 word |= self.mem[addr + i] << (i * 8)
 
             if 0 <= word < (1 << 16):
-                self.tuples.append( (addr, 2, word) )
+                self.tuples.append((addr, 2, word))
                 if self.addrs[addr_index] == addr + 1:
                     addr_index += 1  # backstepped
                 elif self.addrs[addr_index + 1] == addr + 1:
@@ -135,10 +150,10 @@ class PayloadGenerator:
                 if addr_index > 0 and self.addrs[addr_index - 1] > self.addrs[addr_index] - 1:
                     addr_index -= 1  # can't fit one byte, backstepping
                 else:
-                    self.tuples.append( (addr, 1, self.mem[addr]) )
+                    self.tuples.append((addr, 1, self.mem[addr]))
                     addr_index += 1
-
-        self.tuples.sort(key=operator.itemgetter(2))
+        if autosort:
+            self.tuples.sort(key=operator.itemgetter(2))
         return
 
     def check_nullbyte(self, addr):
@@ -166,6 +181,13 @@ class PayloadGenerator:
             printed = start_len
             for addr, size, value in self.tuples:
                 print_len = value - printed
+                if print_len < 0:  # Patchs some errors
+                    if size == 1:
+                        print_len &= 0xff
+                    elif size == 2:
+                        print_len &= 0xffff
+                    elif size == 4:
+                        print_len &= 0xffffffff
                 if print_len > 2:
                     payload += "%" + str(print_len) + "c"
                 elif print_len >= 0:
@@ -175,17 +197,17 @@ class PayloadGenerator:
                     continue
 
                 modi = {
-                        1: "hh",
-                        2: "h",
-                        4: ""
+                    1: "hh",
+                    2: "h",
+                    4: ""
                 }[size]
                 payload += "%" + str(index) + "$" + modi + "n"
                 addrs += struct.pack("<I", addr)
                 printed += print_len
                 index += 1
-            
-            payload += "A" *  ((padding-len(payload)) % 4)  # align 4 bytes
-            
+
+            payload += "A" * ((padding - len(payload)) % 4)  # align 4 bytes
+
             if len(payload) == prev_len:
                 payload += addrs  # argnumbers are set right
                 break
@@ -198,12 +220,14 @@ class PayloadGenerator:
             warning("Payload contains NULL bytes.")
         return payload.ljust(self.buffer_size, "\x90")
 
+
 class Word:
     def __init__(self, value):
         self.value = value % (1 << 16)
 
     def __int__(self):
         return self.value
+
 
 class Byte:
     def __init__(self, value):
@@ -212,16 +236,20 @@ class Byte:
     def __int__(self):
         return self.value
 
+
 def warning(s):
-        print >>sys.stderr, "WARNING:", s
+    print >> sys.stderr, "WARNING:", s
+
 
 def tuples_sorted_by_values(adict):
     """Return list of (key, value) pairs of @adict sorted by values."""
     return sorted(adict.items(), lambda x, y: cmp(x[1], y[1]))
 
+
 def tuples_sorted_by_keys(adict):
     """Return list of (key, value) pairs of @adict sorted by keys."""
     return [(key, adict[key]) for key in sorted(adict.keys())]
+
 
 def main():
     # Usage example

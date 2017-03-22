@@ -57,7 +57,17 @@ p[0xbffffe70] = "\x70\xfe\xff\xbf\xeb\xfe"  # yes, you can also put strings
 
 sys.stdout.write( p.payload(argnum, padding, 3) ) # we know 3 bytes were printed already
 ```
+* Case 4 - write something in specificed order:
 
+```python
+from libformatstr import FormatStr
+f=FormatStr(autosort=False) #This option disables auto sorting
+f[0x1234]=0x1
+f[0x5678]=0x2
+f[0xabcd]=0x3
+
+#The payload will write address 0x1234 first,then 0x5678,then 0xabcd.
+```
 About
 ---------------------
 
