@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
-import re
 import sys
 import struct
 import operator
@@ -19,15 +18,45 @@ from collections import OrderedDict
 #   Word(0xdead)
 #   Packed: "\xef\xbe\xad\xde\xce\xfa\xad\xde"
 #   List of values above: [0xdeadbeef, "sc\x00\x00", "test", Word(0x1337)]
+def pack32(n):
+    return struct.pack("<I", n)
+
+
+def pack64(n):
+    return struct.pack("<Q", n)
+
+
+def unpack32(s):
+    return struct.unpack("<I", s)[0]
+
+
+def unpack64(s):
+    return struct.unpack("<Q", s)[0]
+
+
+def pack(n, is64):
+    if is64:
+        return pack64(n)
+    else:
+        return pack32(n)
+
+
+def unpack(s, is64):
+    if is64:
+        return unpack64(s)
+    else:
+        return unpack32(s)
+
 
 class FormatStr:
-    def __init__(self, buffer_size=0, autosort=True):
+    def __init__(self, buffer_size=0, isx64=0, autosort=True):
         if autosort:
             self.mem = {}
         else:
             self.mem = OrderedDict()
         self.buffer_size = buffer_size
         self.autosort = autosort
+        self.isx64 = isx64
         self.parsers = {
             list: self._set_list,
             str: self._set_str,
@@ -40,9 +69,12 @@ class FormatStr:
     def __setitem__(self, addr, value):
         addr_type = type(addr)
         if addr_type in (int, long):
-            addr = addr % (1 << 32)
+            if self.isx64:
+                addr = addr % (1 << 64)
+            else:
+                addr = addr % (1 << 32)
         elif addr_type == str:
-            addr = struct.unpack("<I", addr)[0]
+            addr = unpack(addr, self.isx64)
         else:
             raise TypeError("Address must be int or packed int, not: " + str(addr_type))
 
@@ -88,17 +120,21 @@ class FormatStr:
     def byte(self, addr, value):
         return self._set_byte(addr, value)
 
+    def dword(self, addr, value):
+        return self._set_dword(addr, value)
+
     def payload(self, *args, **kwargs):
-        gen = PayloadGenerator(self.mem, self.buffer_size, autosort=self.autosort)
+        gen = PayloadGenerator(self.mem, self.buffer_size, is64=self.isx64, autosort=self.autosort)
         return gen.payload(*args, **kwargs)
 
 
 class PayloadGenerator:
-    def __init__(self, mem=OrderedDict(), buffer_size=0, autosort=True):
+    def __init__(self, mem=OrderedDict(), buffer_size=0, is64=0, autosort=True):
         """
         Make tuples like (address, word/dword, value), sorted by value as default.
         Trying to avoid null byte by using preceding address in the case.
         """
+        self.is64 = is64
         self.mem = mem
         self.buffer_size = buffer_size
         self.tuples = []
@@ -157,9 +193,9 @@ class PayloadGenerator:
         return
 
     def check_nullbyte(self, addr):
-        if "\x00" in struct.pack("<I", addr):
+        if "\x00" in pack(addr, self.is64):
             # check if preceding address can be used
-            if (addr - 1) not in self.mem or "\x00" in struct.pack("<I", addr - 1):
+            if (addr - 1) not in self.mem or "\x00" in pack(addr - 1, self.is64):
                 # to avoid null bytes in the last byte of address, set previous byte
                 warning("Can't avoid null byte at address " + hex(addr))
             else:
@@ -172,8 +208,11 @@ class PayloadGenerator:
         @padding - determing padding size needed to align dwords (padding will be added)
         @start_len - len of already printed data (we can't change this)
         """
+        if self.is64:
+            align = 8
+        else:
+            align = 4
         prev_len = -1
-        prev_pay = ""
         index = arg_index * 10000  # enough for sure
         while True:
             payload = ""
@@ -193,7 +232,7 @@ class PayloadGenerator:
                 elif print_len >= 0:
                     payload += "A" * print_len
                 else:
-                    warning("Can't write a value %08x (too small)." % value)
+                    warning("Can't write a value %08x (too small) %08x." % (value, print_len))
                     continue
 
                 modi = {
@@ -202,19 +241,18 @@ class PayloadGenerator:
                     4: ""
                 }[size]
                 payload += "%" + str(index) + "$" + modi + "n"
-                addrs += struct.pack("<I", addr)
+                addrs += pack(addr, self.is64)
                 printed += print_len
                 index += 1
 
-            payload += "A" * ((padding - len(payload)) % 4)  # align 4 bytes
-
+            payload += "A" * ((padding - len(payload)) % align)
             if len(payload) == prev_len:
                 payload += addrs  # argnumbers are set right
                 break
 
             prev_len = len(payload)
-            prev_pay = payload
-            index = arg_index + len(payload) // 4
+
+            index = arg_index + len(payload) // align
 
         if "\x00" in payload:
             warning("Payload contains NULL bytes.")
