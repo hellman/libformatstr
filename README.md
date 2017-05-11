@@ -73,7 +73,7 @@ f[0xabcd]=0x3
 
 ```python
 from libformatstr import FormatStr
-f=FormatStr(isx64=1) #This option force script to use 64bit address
+f=FormatStr(isx64=1) #This option force script to use 64bit address while generating payload
 f[0x1234]=0x1
 f[0x5678]=0x2
 f[0xabcd]=0x3
