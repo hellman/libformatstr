@@ -68,6 +68,16 @@ f[0xabcd]=0x3
 
 #The payload will write address 0x1234 first,then 0x5678,then 0xabcd.
 ```
+
+* Case 5 - while you are in amd64:
+
+```python
+from libformatstr import FormatStr
+f=FormatStr(isx64=1) #This option force script to use 64bit address while generating payload
+f[0x1234]=0x1
+f[0x5678]=0x2
+f[0xabcd]=0x3
+```
 About
 ---------------------
 
