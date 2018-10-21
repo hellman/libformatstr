@@ -1,3 +1,5 @@
+[![Rawsec's CyberSecurity Inventory](https://inventory.rawsec.ml/img/badges/Rawsec-inventoried-FF5050_flat.svg)](https://inventory.rawsec.ml/tools.html#libformatstr)
+
 libformatstr.py
 ====================
 
