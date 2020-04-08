@@ -140,9 +140,9 @@ class PayloadGenerator:
         self.tuples = []
         self.autosort = autosort
         if autosort:
-            self.addrs = list(mem.keys())  # addresses of each byte to set
+            self.addrs = list(sorted(mem.keys()))  # addresses of each byte to set
         else:
-            self.addrs = list(sorted(mem.keys()))
+            self.addrs = list(mem.keys())
 
         addr_index = 0
         while addr_index < len(self.addrs):
